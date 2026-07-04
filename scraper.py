@@ -11,7 +11,7 @@ Handles:
 import re
 import time
 from typing import Optional, List, Dict
-
+from browserless import fetch_page_browserless_sync as _fetch_page
 from bs4 import BeautifulSoup
 
 
