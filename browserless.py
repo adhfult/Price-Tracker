@@ -18,8 +18,12 @@ import os
 import httpx
 from typing import Tuple
 
-BROWSERLESS_API_KEY = os.getenv("BROWSERLESS_API_KEY", "")
-BROWSERLESS_URL = "https://api.browserless.io"
+def _browserless_api_key() -> str:
+    return os.getenv("BROWSERLESS_API_KEY", "").strip()
+
+
+def _browserless_url() -> str:
+    return os.getenv("BROWSERLESS_URL", "https://chrome.browserless.io").rstrip("/")
 
 
 async def fetch_page_browserless(url: str) -> Tuple[str, str]:
@@ -32,34 +36,40 @@ async def fetch_page_browserless(url: str) -> Tuple[str, str]:
     Returns:
         (html_content, final_url)
     """
-    if not BROWSERLESS_API_KEY:
+    key = _browserless_api_key()
+    if not key:
         raise ValueError(
             "BROWSERLESS_API_KEY not set. Get it from https://www.browserless.io/"
         )
-    
+    base_url = _browserless_url()
+
     async with httpx.AsyncClient(timeout=60.0) as client:
         payload = {
             "url": url,
-            "screenshot": False,  # Don't need screenshots
-            "pdf": False,  # Don't need PDF
+            "gotoOptions": {"waitUntil": "networkidle2"},
+            "stealth": True,
         }
-        
+
         headers = {
-            "Authorization": f"Bearer {BROWSERLESS_API_KEY}",
             "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
         }
-        
+
         response = await client.post(
-            f"{BROWSERLESS_URL}/content",
+            f"{base_url}/content?token={key}",
             json=payload,
             headers=headers,
         )
         
         if response.status_code != 200:
             raise Exception(f"Browserless error: {response.text}")
-        
-        data = response.json()
-        return data.get("data", ""), data.get("finalUrl", url)
+
+        content_type = response.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = response.json()
+            return data.get("data", ""), data.get("finalUrl", url)
+
+        return response.text, url
 
 
 # For synchronous usage (wrapper around async)
