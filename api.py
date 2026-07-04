@@ -7,6 +7,7 @@ Base URL: https://yourusername.pythonanywhere.com (example)
 RapidAPI Base URL: Set to above in RapidAPI Studio
 """
 
+import asyncio
 import os
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Query
@@ -131,8 +132,10 @@ async def get_price(
         norm_url = scraper.normalize_amazon_url(url)
         logger.info(f"Scraping price for: {norm_url}")
         
-        # Get price data
-        result = scraper.get_current_price(norm_url, condition=condition)
+        # Run sync Playwright code in thread pool to avoid asyncio loop conflicts
+        result = await asyncio.to_thread(
+            lambda: scraper.get_current_price(norm_url, condition=condition)
+        )
         
         return PriceResponse(
             status="success",
@@ -201,7 +204,8 @@ async def get_full_details(
         norm_url = scraper.normalize_amazon_url(url)
         logger.info(f"Scraping full details for: {norm_url}")
         
-        result = scraper.get_product_details(norm_url)
+        # Run sync Playwright code in thread pool to avoid asyncio loop conflicts
+        result = await asyncio.to_thread(scraper.get_product_details, norm_url)
         
         return FullDetailsResponse(
             status="success",
