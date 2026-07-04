@@ -1,58 +1,96 @@
 # Amazon Price Tracker → API → RapidAPI
 
-Real-time Amazon product price scraping with Playwright, exposed as a monetizable REST API via RapidAPI.
+A ready-to-deploy Amazon price tracker that works as a local CLI and a cloud API product.
+
+This project is built to:
+- scrape Amazon product prices reliably,
+- expose those results via FastAPI,
+- use Browserless for cloud rendering,
+- and become a monetizable RapidAPI listing.
 
 **Status:** ✅ CLI works locally | 🚀 API ready for deployment
 
 ---
 
-## 🎯 Overview
+## 🎯 Product Overview
 
-This project provides two ways to track Amazon prices:
+This is more than a scraper — it is a developer-friendly price tracking API.
 
-1. **CLI Mode** (Local) - `python main.py`
-   - Interactive menu
-   - Auto-monitoring with alerts
-   - Local storage
+### What it does
+- Scrapes Amazon product pages for buy-box price, Prime price, list price, stock status, and discount data
+- Provides a lightweight price endpoint and a full product detail endpoint
+- Tracks items in local JSON storage for repeat monitoring
+- Supports condition-specific pricing (used/refurbished tiers)
+- Exposes item management and monitoring endpoints for API-driven workflows
 
-2. **API Mode** (Cloud) - `python -m uvicorn api:app --reload`
-   - REST endpoints
-   - RapidAPI marketplace integration
-   - Monetization ready
+### Who it helps
+- resellers monitoring price movements
+- bargain hunters building custom alerts
+- competitors tracking pricing trends
+- developers building dashboards or price comparison tools
+
+---
+
+## 🔧 How it works
+
+### Local mode
+- `main.py` runs an interactive CLI
+- lets users add and manage tracked Amazon products
+- uses local Playwright scraping when available
+- stores data in `./data/items.json`
+
+### API mode
+- `api.py` exposes REST endpoints via FastAPI
+- `scraper.py` handles page parsing
+- `browserless.py` fetches rendered pages in the cloud
+- endpoints are ready for RapidAPI listing
+
+### Deployment flow
+
+```text
+RapidAPI user
+      ↓
+RapidAPI gateway
+      ↓
+Deployed Render/Railway service
+      ↓
+api.py → scraper.py → browserless.py
+      ↓
+Amazon product page
+```
 
 ---
 
 ## 🚀 Quick Start
 
-### Local Testing (5 minutes)
+### 1) Run the CLI locally
 
 ```bash
-# 1. Install dependencies
 pip install -r requirements.txt
-
-# 2. Run CLI (existing feature)
 python main.py
-
-# 3. Test API in another terminal
-python -m uvicorn api:app --reload --port 8000
-
-# 4. Visit interactive docs
-# Open: http://localhost:8000/docs
 ```
 
-### Test Endpoints
+### 2) Run the API locally
 
 ```bash
-# Get current price
+python -m uvicorn api:app --reload --port 8000
+```
+
+Open the docs at:
+
+```text
+http://localhost:8000/docs
+```
+
+### 3) Test the endpoints
+
+```bash
 curl "http://localhost:8000/scrape/price?url=https://www.amazon.com/dp/B0DHJ896RY"
 
-# Get full product details
 curl "http://localhost:8000/scrape/full?url=https://www.amazon.com/dp/B0DHJ896RY"
 
-# Validate URL
 curl "http://localhost:8000/validate?url=https://www.amazon.com/dp/B0DHJ896RY"
 
-# Health check
 curl "http://localhost:8000/health"
 ```
 
@@ -62,310 +100,166 @@ curl "http://localhost:8000/health"
 
 ```
 Price Tracker/
-├── main.py              # CLI entry point (unchanged)
+├── main.py              # CLI entry point
 ├── models.py            # Data structures
-├── scraper.py           # Playwright web scraper
-├── storage.py           # JSON file storage
+├── scraper.py           # Amazon scraping logic
+├── storage.py           # JSON persistence
 ├── notifier.py          # Alerts & notifications
 │
-├── api.py               # ✨ NEW: FastAPI server
-├── browserless.py       # ✨ NEW: Cloud Playwright (for PythonAnywhere)
-├── requirements.txt     # ✨ UPDATED: +FastAPI +uvicorn
+├── api.py               # FastAPI server
+├── browserless.py       # Browserless integration
+├── requirements.txt     # Python dependencies
 │
-├── DEPLOYMENT_GUIDE.md  # 📖 Step-by-step RapidAPI setup
-├── .env.example         # Environment variables template
+├── DEPLOYMENT_GUIDE.md  # RapidAPI deployment guide
+├── .env.example         # Environment template
 ├── .gitignore           # Git ignore rules
 │
 └── data/
-    ├── config.json      # Settings
-    └── items.json       # Tracked items
+    ├── config.json      # app settings
+    └── items.json       # tracked items
 ```
 
 ---
 
-## 📋 What's New (Phase 2)
+## 📋 API Endpoints
 
-| Feature | Details |
-|---------|---------|
-| **FastAPI** | Modern, fast web framework for Python APIs |
-| **api.py** | 4 endpoints for price scraping & validation |
-| **Browserless.io** | Cloud-based Playwright for PythonAnywhere |
-| **RapidAPI Ready** | Pre-configured error handling, responses, docs |
-| **Interactive Docs** | Swagger UI at `/docs` for testing |
-| **CORS Enabled** | Works with web frontends, mobile apps |
+### `GET /scrape/price`
+Fetch the current price and availability for a product.
 
----
+- query: `url` (required)
+- query: `condition` (optional)
+- returns: price, original price, Prime price, stock, discount
+- use case: alerts, dashboards, price monitoring
 
-## 🔗 API Endpoints
+### `GET /scrape/full`
+Fetch detailed Amazon product metadata and variants.
 
-### 1. Get Current Price
-```
-GET /scrape/price?url=<amazon_url>&condition=<optional>
-```
-- **Response time:** 10-15 seconds
-- **Use case:** Price monitoring, dashboards, alerts
-- **Returns:** Current price, original price, Prime price, stock status
+- query: `url` (required)
+- returns: title, ASIN, pricing tiers, variants, stock data
+- use case: product research, catalogs, comparison tools
 
-### 2. Get Full Details
-```
-GET /scrape/full?url=<amazon_url>
-```
-- **Response time:** 20-30 seconds
-- **Use case:** Catalog scraping, variants, detailed research
-- **Returns:** Title, ASIN, all prices, stock, color/size/storage options
+### `GET /validate`
+Check whether a URL is a valid Amazon product link.
 
-### 3. Validate URL
-```
-GET /validate?url=<url>
-```
-- **Response time:** <100ms
-- **Use case:** Quick URL validation before scraping
-- **Returns:** Valid/invalid + normalized URL + ASIN
+- query: `url` (required)
+- returns: valid flag, normalized URL, ASIN
+- use case: request validation before scraping
 
-### 4. Health Check
-```
-GET /health
-```
-- **Response time:** <10ms
-- **Use case:** Uptime monitoring
-- **Returns:** Service status + version
+### `GET /health`
+Service health check.
+
+- returns: service status, version
+- use case: uptime monitoring
 
 ---
 
-## 🌐 Deployment Options
+## 🚀 Deploy to the Cloud
 
-### Option A: PythonAnywhere (Recommended for Beginners)
+### Recommended hosts
+- Render
+- Railway
 
-1. ✅ Sign up at https://www.pythonanywhere.com/
-2. ✅ Connect your GitHub repo
-3. ✅ Set base URL to `https://yourusername.pythonanywhere.com`
-4. ✅ Follow [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
-
-**Pros:** Easy setup, works out of the box
-**Cons:** Slow free tier, limited CPU
-
-### Option B: Render / Railway
-
-1. ✅ Push code to GitHub
-2. ✅ Connect repo to Render.com or Railway.app
-3. ✅ Deploy with one click
-4. ✅ Get live URL
-
-**Pros:** Faster, free tier available
-**Cons:** More configuration
-
-### Option C: AWS Lambda (Advanced)
-
-1. ✅ Package with `serverless-python-requirements`
-2. ✅ Deploy with Serverless Framework
-3. ✅ Use API Gateway for HTTP endpoints
-
-**Pros:** Scales automatically, pay-per-request
-**Cons:** More complex setup
+### Deploy steps
+1. Push the repo to GitHub
+2. Create a new web service on Render or Railway
+3. Use start command:
+   `uvicorn api:app --host 0.0.0.0 --port 8000`
+4. Add environment variables
+5. Deploy and copy your service URL
 
 ---
 
-## 💰 Monetization (RapidAPI)
+## 💡 RapidAPI Integration
 
-### How It Works
+This service is built to be published as a RapidAPI product:
+- point RapidAPI to your deployed backend URL
+- add the scraping endpoints
+- define pricing tiers
+- publish the listing
 
-1. You deploy API to cloud
-2. You list it on RapidAPI marketplace
-3. Users subscribe to pricing tiers
-4. RapidAPI routes requests → you get 70% commission
-5. Monthly payouts via PayPal/Stripe
-
-### Example Revenue
-
-| Tier | Price | Users | Revenue |
-|------|-------|-------|---------|
-| Free | $0 | 50 | $0 |
-| Basic | $9.99 | 20 | $140/mo |
-| Pro | $49.99 | 5 | $175/mo |
-| **Total** | | | **$315/mo** |
-
-See: [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for full pricing guide
+Your backend handles scraping and Browserless calls; RapidAPI handles authentication, billing, and marketplace distribution.
 
 ---
 
 ## 🛠️ Configuration
 
-### Environment Variables
-
-Create a `.env` file (copy from `.env.example`):
+Create a `.env` file from `.env.example`:
 
 ```env
-# For cloud Playwright (PythonAnywhere)
 BROWSERLESS_API_KEY=your_api_key_here
-
-# For local development
 PORT=8000
 ```
 
-### Browserless.io Setup
-
-Free tier: 100 pages/month
-```bash
-python -c "from browserless import setup_browserless; setup_browserless()"
-```
+Use Browserless when your cloud host cannot run local Chromium directly.
 
 ---
 
-## ⚠️ Important Notes
+## ⚠️ Notes
 
-### Local vs. Cloud
+### Local vs Cloud
 
-| Aspect | Local (main.py) | Cloud API (api.py) |
-|--------|-----------------|------------------|
-| Browser | Uses local Playwright | Uses Browserless.io |
-| Response time | 15-30s | 15-30s |
-| Cost | Free (CPU) | $0-50/month |
-| Scalability | 1 request at a time | 100+ concurrent |
-| 24/7 Uptime | Requires your computer on | Automatic |
+| Mode | `main.py` | `api.py` |
+|------|-----------|----------|
+| Local | CLI + local scraping | not used |
+| Cloud | not used | API + Browserless |
 
-### Amazon Rate Limiting
-
-- Don't scrape >100 products/hour
-- Add random delays between requests
-- Use rotating proxies for bulk scraping
-- Respect `robots.txt`
-
-### Error Handling
-
-All errors return consistent JSON:
-```json
-{
-  "status": "error",
-  "error": "Invalid Amazon URL",
-  "code": 400
-}
-```
-
----
-
-## 📖 Full Documentation
-
-For complete step-by-step deployment guide, see:
-
-**📄 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)**
-
-Covers:
-- Local testing
-- Cloud deployment (PythonAnywhere)
-- RapidAPI integration
-- Pricing setup
-- Monitoring & maintenance
-- Troubleshooting
+### Amazon scraping best practices
+- Keep request volume moderate
+- Add pauses between checks
+- Use Browserless to avoid browser binary issues
+- Respect Amazon’s terms of service
 
 ---
 
 ## 🧪 Testing
 
-### Unit Tests (Optional)
+### Local
 
 ```bash
-pip install pytest pytest-asyncio
-pytest tests/
+python -m uvicorn api:app --reload --port 8000
 ```
 
-### Load Testing
+### RapidAPI
 
-```bash
-pip install locust
-
-# Create locustfile.py and run:
-locust -f locustfile.py --host=http://localhost:8000
-```
-
-### RapidAPI Testing
-
-1. Go to your RapidAPI app dashboard
-2. Click "Test Endpoint"
-3. Fill in parameters
-4. Click "Test"
-
----
-
-## 🔒 Security
-
-- ✅ Input validation on all endpoints
-- ✅ CORS enabled for web apps
-- ✅ Error messages don't leak system info
-- ✅ API keys managed by RapidAPI (you don't handle them)
-- ✅ Rate limiting on RapidAPI side
-
-### To Add (Future)
-
-- [ ] Request signing for direct API calls
-- [ ] Custom rate limiting per API key
-- [ ] Analytics dashboard
-- [ ] Webhook notifications
+- Open your app in RapidAPI dashboard
+- Use the built-in endpoint tester
+- Confirm the backend URL is live
 
 ---
 
 ## 🐛 Troubleshooting
 
-### "Connection refused" on localhost:8000
-```bash
-# Make sure API is running:
-python -m uvicorn api:app --reload --port 8000
-```
+### `Connection refused`
+Make sure API is running and reachable.
 
-### "Module not found: scraper"
+### `Module not found: scraper`
+Run from the repo root:
+
 ```bash
-# Add to path:
 cd "c:\Users\fulto\Downloads\Some Projects\Price Tracker"
 python -m uvicorn api:app --reload
 ```
 
-### Playwright crashes on PythonAnywhere
-```bash
-# Set BROWSERLESS_API_KEY and it will use cloud version automatically
-export BROWSERLESS_API_KEY=your_key
-```
-
-See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for more troubleshooting.
+### Playwright / Chromium issues
+Use `BROWSERLESS_API_KEY` with Browserless.io instead of local browser execution.
 
 ---
 
-## 📞 Support
+## 📌 Next Steps
 
-- **API Docs:** http://localhost:8000/docs (when running locally)
-- **FastAPI:** https://fastapi.tiangolo.com/
-- **RapidAPI:** https://rapidapi.com/documentation
-- **Deployment:** See DEPLOYMENT_GUIDE.md
-
----
-
-## 📝 License
-
-Personal use for now. Consider: MIT, GPL, or Commercial.
+1. Run the CLI locally
+2. Run the API locally and verify `/docs`
+3. Deploy to Render/Railway
+4. Connect the deployed URL to RapidAPI
+5. Publish and monitor usage
 
 ---
 
-## 🚀 Next Steps
+## 📞 Resources
 
-1. **Test locally** ✅
-   ```bash
-   python -m uvicorn api:app --reload --port 8000
-   ```
+- [Deployment Guide](DEPLOYMENT_GUIDE.md)
+- [FastAPI docs](https://fastapi.tiangolo.com/)
+- [RapidAPI docs](https://rapidapi.com/documentation)
+- [Browserless docs](https://www.browserless.io/docs)
 
-2. **Deploy to cloud** 📋
-   - Follow [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
-   - Get live URL
-
-3. **Set up RapidAPI** 🎯
-   - Connect base URL
-   - Define endpoints
-   - Set pricing
-
-4. **Monitor revenue** 💰
-   - Check RapidAPI dashboard
-   - Track usage stats
-   - Collect payments
-
----
-
-**Happy scraping! 🕷️** 
-
-Questions? See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for comprehensive setup instructions.
+**Built for developers who want a real API product, not just a script.**

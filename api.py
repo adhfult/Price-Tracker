@@ -2,8 +2,8 @@
 FastAPI web server for Amazon Price Tracker.
 Exposes scraping functionality as REST API endpoints for RapidAPI integration.
 
-Deploy to: PythonAnywhere / Render / Railway
-Base URL: https://yourusername.pythonanywhere.com (example)
+Deploy to: Render / Railway
+Base URL: https://your-api-host.com (example)
 RapidAPI Base URL: Set to above in RapidAPI Studio
 """
 
@@ -511,7 +511,7 @@ async def api_documentation() -> Dict[str, Any]:
     return {
         "title": "Amazon Price Scraper API",
         "description": "Real-time Amazon product scraping via RapidAPI",
-        "base_url": "https://yourusername.pythonanywhere.com (example)",
+        "base_url": "https://your-api-host.com (example)",
         "authentication": "API key via RapidAPI headers",
         "rate_limiting": {
             "free_tier": "100 requests/month",
@@ -545,8 +545,8 @@ async def api_documentation() -> Dict[str, Any]:
             },
         ],
         "examples": {
-            "get_price": "curl 'https://yourusername.pythonanywhere.com/scrape/price?url=https://www.amazon.com/dp/B0DHJ896RY'",
-            "get_full": "curl 'https://yourusername.pythonanywhere.com/scrape/full?url=https://www.amazon.com/dp/B0DHJ896RY'",
+            "get_price": "curl 'https://your-api-host.com/scrape/price?url=https://www.amazon.com/dp/B0DHJ896RY'",
+            "get_full": "curl 'https://your-api-host.com/scrape/full?url=https://www.amazon.com/dp/B0DHJ896RY'",
         },
         "support": "Contact via RapidAPI dashboard",
     }

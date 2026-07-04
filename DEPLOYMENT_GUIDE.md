@@ -18,7 +18,7 @@ main.py (CLI Menu)
                         │ HTTP GET /scrape/price?url=...&key=...
                         ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              PythonAnywhere / Render / Railway                    │
+│                    Render / Railway                             │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │ api.py (FastAPI)                                          │  │
 │  │ - /scrape/price       (lightweight, ~15s)               │  │
@@ -76,7 +76,7 @@ Both CLI (main.py) and API (api.py) coexist!
 
 ### Phase 2: Cloud-Based Playwright (Browserless.io)
 
-> **Why?** PythonAnywhere doesn't support installing system binaries like Chromium. Solution: Use Browserless.io API instead.
+> **Why?** Some cloud platforms do not support installing Chromium system binaries. Solution: Use Browserless.io API instead.
 
 #### ✅ Step 1: Sign Up for Browserless.io
 1. Go to https://www.browserless.io/
@@ -93,7 +93,7 @@ python -c "from browserless import setup_browserless; setup_browserless()"
 ```
 
 #### ✅ Step 3: (Optional) Enable in scraper.py
-If deploying to PythonAnywhere, uncomment this in scraper.py:
+If deploying to a cloud host that does not support local browser binaries, uncomment this in scraper.py:
 ```python
 # from browserless import fetch_page_browserless_sync as _fetch_page
 ```
@@ -107,7 +107,7 @@ And comment out the local Playwright version:
 
 ---
 
-### Phase 3: Deploy to PythonAnywhere
+### Phase 3: Deploy to Render or Railway
 
 #### ✅ Step 1: Prepare GitHub Repository
 ```bash
@@ -120,35 +120,23 @@ git push -u origin main
 
 > Need GitHub? Free account at https://github.com
 
-#### ✅ Step 2: Create PythonAnywhere Account
-1. Go to https://www.pythonanywhere.com/
-2. Sign up (free tier: 100MB storage, auto-shutdowns)
-3. Upgrade to paid if needed ($5/month for always-on)
+#### ✅ Step 2: Deploy to Render or Railway
+1. Go to https://render.com/ or https://railway.app/
+2. Create a new web service and connect your GitHub repo
+3. Set the start command to:
+   `uvicorn api:app --host 0.0.0.0 --port 8000`
+4. Set any required environment variables
+5. Deploy the service
 
-#### ✅ Step 3: Deploy from GitHub
-On PythonAnywhere:
-1. **Web** → **Add a new web app** → Select **FastAPI**
-2. **Source code** → **Clone from GitHub**
-3. Enter: `https://github.com/yourusername/price-tracker.git`
-4. Configure **WSGI file** to load: `api:app`
-5. Set **Python version** to 3.9+
+#### ✅ Step 3: Install Dependencies
+Your service will install dependencies from `requirements.txt` automatically during deploy.
 
-#### ✅ Step 4: Install Dependencies
-In PythonAnywhere **Bash console:**
-```bash
-cd /home/yourusername/price-tracker
-pip install -r requirements.txt
-```
-
-#### ✅ Step 5: Get Your Live URL
-Your API is now live at:
-```
-https://yourusername.pythonanywhere.com
-```
+#### ✅ Step 4: Get Your Live URL
+Your API is now live at the URL provided by the platform.
 
 Test it:
 ```bash
-curl https://yourusername.pythonanywhere.com/health
+curl https://your-app-url.onrender.com/health
 ```
 
 Should return:
@@ -170,7 +158,7 @@ You already have an "Amazon-Price-Scraper" app set up (from your screenshot).
 #### ✅ Step 2: Set Base URL
 1. Click your app → **Settings** tab
 2. Find **Base URL** field
-3. Enter: `https://yourusername.pythonanywhere.com`
+3. Enter your deployed service URL (e.g. `https://your-app-url.onrender.com`)
 4. **Save**
 
 #### ✅ Step 3: Define Endpoints
@@ -226,7 +214,7 @@ Once approved, your API is live on RapidAPI marketplace!
 #### ✅ Set Up Uptime Monitoring
 Use **UptimeRobot.com** (free):
 1. Go to https://uptimerobot.com/
-2. Add new monitor: `https://yourusername.pythonanywhere.com/health`
+2. Add new monitor for your deployed health endpoint
 3. Get alerted if your API goes down
 
 #### ✅ Monitor Usage on RapidAPI
@@ -266,13 +254,12 @@ async def get_price(...):
 
 ## 🔧 Troubleshooting
 
-### "Module not found" error on PythonAnywhere
+### "Module not found" error on deployment host
 ```bash
-# SSH into PythonAnywhere and reinstall:
 pip install -r requirements.txt --force-reinstall
 ```
 
-### Playwright fails on PythonAnywhere
+### Playwright fails on deployment host
 **Solution:** Use Browserless.io instead (already configured in this guide).
 
 ### API returns 429 (Amazon rate limiting)
@@ -284,11 +271,11 @@ pip install -r requirements.txt --force-reinstall
 ### RapidAPI shows "Endpoint unreachable"
 **Debugging:**
 ```bash
-# Test from PythonAnywhere:
-curl https://yourusername.pythonanywhere.com/health
+# Test from deployment host:
+curl https://your-app-url.onrender.com/health
 
 # Check logs:
-# PythonAnywhere Dashboard → Web → Error log
+# Render or Railway console logs
 ```
 
 ---
@@ -309,7 +296,7 @@ curl https://yourusername.pythonanywhere.com/health
 
 1. **Test locally** → `python -m uvicorn api:app --reload --port 8000`
 2. **Push to GitHub** → Create repo + push code
-3. **Deploy to PythonAnywhere** → Connect GitHub + deploy
+3. **Deploy to Render or Railway** → Connect GitHub + deploy
 4. **Configure RapidAPI** → Set base URL + endpoints
 5. **Test endpoints** → Use RapidAPI's "Test Endpoint" feature
 6. **Publish** → Submit to marketplace
@@ -331,7 +318,9 @@ curl https://yourusername.pythonanywhere.com/health
 
 - **FastAPI Docs:** https://fastapi.tiangolo.com/
 - **RapidAPI Hub:** https://rapidapi.com/documentation
-- **PythonAnywhere:** https://help.pythonanywhere.com/
+- **Render docs:** https://render.com/docs
+- **Railway docs:** https://docs.railway.app/
+- **Browserless.io:** https://www.browserless.io/docs
 - **Browserless.io:** https://www.browserless.io/docs
 
 ---

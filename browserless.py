@@ -1,8 +1,8 @@
 """
 Browserless.io integration for cloud-based Playwright.
 
-When deployed to PythonAnywhere or other cloud platforms that don't support
-local Playwright/Chromium, use Browserless.io instead.
+When deployed to cloud platforms that don't support local Playwright/Chromium,
+use Browserless.io instead.
 
 Setup:
 1. Sign up at https://www.browserless.io/

@@ -14,5 +14,5 @@ uvicorn[standard]>=0.24.0
 pydantic>=2.0.0
 python-multipart>=0.0.6
 
-# Cloud Playwright support (Browserless.io for Render/PythonAnywhere)
+# Cloud Playwright support (Browserless.io for Render/Railway)
 httpx>=0.25.0

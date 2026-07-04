@@ -49,7 +49,7 @@ curl "http://localhost:8000/scrape/price?url=https://www.amazon.com/dp/B0DHJ896R
 ```
 Local Testing (5 min)
     ↓
-Deploy to PythonAnywhere (30 min)
+Deploy to Render or Railway (30 min)
     ↓
 Connect to RapidAPI (15 min)
     ↓
