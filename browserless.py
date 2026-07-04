@@ -46,8 +46,6 @@ async def fetch_page_browserless(url: str) -> Tuple[str, str]:
     async with httpx.AsyncClient(timeout=60.0) as client:
         payload = {
             "url": url,
-            "gotoOptions": {"waitUntil": "networkidle2"},
-            "stealth": True,
         }
 
         headers = {
