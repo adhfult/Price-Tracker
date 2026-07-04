@@ -9,7 +9,9 @@ RapidAPI Base URL: Set to above in RapidAPI Studio
 
 import asyncio
 import os
-from typing import Optional, Dict, Any
+import uuid
+from datetime import datetime
+from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +19,9 @@ from pydantic import BaseModel, Field
 import logging
 
 import scraper
+import storage
+import main as cli_main
+from models import TrackedItem, AlertCriteria, AlertType
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Configuration
@@ -72,6 +77,101 @@ class HealthResponse(BaseModel):
     status: str = Field(default="online")
     version: str = Field(default="1.0.0")
     service: str = Field(default="Amazon Price Scraper API")
+
+
+class AlertCriteriaInput(BaseModel):
+    alert_type: str = Field(default="any_drop")
+    target_price: Optional[float] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    drop_amount: Optional[float] = None
+    drop_percent: Optional[float] = None
+
+
+class AddItemRequest(BaseModel):
+    url: str = Field(..., description="Amazon product URL")
+    currency: Optional[str] = Field(None, description="Currency code, defaults to saved config")
+    location: Optional[str] = Field(None, description="Location, defaults to saved config")
+    selected_variants: Optional[Dict[str, str]] = Field(default_factory=dict)
+    alert_criteria: Optional[AlertCriteriaInput] = None
+
+
+class ItemResponse(BaseModel):
+    id: str
+    url: str
+    title: str
+    asin: str
+    currency: str
+    location: str
+    selected_variants: Dict[str, str]
+    last_price: Optional[float] = None
+    last_original_price: Optional[float] = None
+    last_prime_price: Optional[float] = None
+    last_discount_percent: Optional[float] = None
+    baseline_price: Optional[float] = None
+    is_prime_eligible: bool = False
+    in_stock: bool = True
+    date_added: str = ""
+    last_checked: str = ""
+    alert_triggered: bool = False
+    alert_criteria: Dict[str, Any]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Helper functions
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _criteria_from_payload(payload: Optional[AlertCriteriaInput]) -> AlertCriteria:
+    if not payload:
+        return AlertCriteria(alert_type=AlertType.ANY_DROP)
+
+    mapping = {
+        "below_price": AlertType.BELOW_PRICE,
+        "in_range": AlertType.IN_RANGE,
+        "any_drop": AlertType.ANY_DROP,
+        "drop_by_amount": AlertType.DROP_BY_AMOUNT,
+        "drop_by_percent": AlertType.DROP_BY_PERCENT,
+    }
+    alert_type = mapping.get(payload.alert_type.lower(), AlertType.ANY_DROP)
+    return AlertCriteria(
+        alert_type=alert_type,
+        target_price=payload.target_price,
+        min_price=payload.min_price,
+        max_price=payload.max_price,
+        drop_amount=payload.drop_amount,
+        drop_percent=payload.drop_percent,
+    )
+
+
+def _item_to_payload(item: TrackedItem) -> ItemResponse:
+    return {
+        "id": item.id,
+        "url": item.url,
+        "title": item.title,
+        "asin": item.asin,
+        "currency": item.currency,
+        "location": item.location,
+        "selected_variants": item.selected_variants,
+        "last_price": item.last_price,
+        "last_original_price": item.last_original_price,
+        "last_prime_price": item.last_prime_price,
+        "last_discount_percent": item.last_discount_percent,
+        "baseline_price": item.baseline_price,
+        "is_prime_eligible": item.is_prime_eligible,
+        "in_stock": item.in_stock,
+        "date_added": item.date_added,
+        "last_checked": item.last_checked,
+        "alert_triggered": item.alert_triggered,
+        "alert_criteria": {
+            "alert_type": item.alert_criteria.alert_type.value,
+            "target_price": item.alert_criteria.target_price,
+            "min_price": item.alert_criteria.min_price,
+            "max_price": item.alert_criteria.max_price,
+            "drop_amount": item.alert_criteria.drop_amount,
+            "drop_percent": item.alert_criteria.drop_percent,
+        },
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -221,6 +321,100 @@ async def get_full_details(
             status_code=400,
             detail=f"Failed to scrape product details: {str(e)}",
         )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Item Management Endpoints
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post(
+    "/items",
+    response_model=Dict[str, Any],
+    summary="Track a new product",
+    tags=["Items"],
+)
+async def add_item(payload: AddItemRequest) -> Dict[str, Any]:
+    if not scraper.is_valid_amazon_url(payload.url):
+        raise HTTPException(status_code=400, detail="Invalid Amazon URL")
+
+    cfg = storage.load_config()
+    currency = payload.currency or cfg.get("currency") or "USD"
+    location = payload.location or cfg.get("location") or "Unknown"
+
+    try:
+        details = await asyncio.to_thread(scraper.get_product_details, payload.url)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch product details: {exc}")
+
+    effective = cli_main._effective_price(details.get("price"), details.get("prime_price"))
+    criteria = _criteria_from_payload(payload.alert_criteria)
+    tracking_url = details.get("normalized_url", payload.url)
+
+    item = TrackedItem(
+        id=str(uuid.uuid4()),
+        url=tracking_url,
+        title=details.get("title", "Unknown Product"),
+        asin=details.get("asin", ""),
+        currency=currency,
+        location=location,
+        alert_criteria=criteria,
+        selected_variants=payload.selected_variants or {},
+        last_price=effective,
+        last_original_price=details.get("original_price"),
+        last_prime_price=details.get("prime_price"),
+        last_discount_percent=details.get("discount_percent"),
+        baseline_price=effective,
+        is_prime_eligible=details.get("is_prime_eligible", False),
+        in_stock=details.get("in_stock", True),
+        date_added=datetime.now().isoformat(),
+        last_checked=datetime.now().isoformat(),
+    )
+    storage.add_item(item)
+    return {"status": "success", "item": _item_to_payload(item)}
+
+
+@app.get(
+    "/items",
+    response_model=List[Dict[str, Any]],
+    summary="List tracked items",
+    tags=["Items"],
+)
+async def list_items() -> List[Dict[str, Any]]:
+    items = storage.load_items()
+    return [_item_to_payload(item) for item in items]
+
+
+@app.post(
+    "/items/{item_id}/check",
+    response_model=Dict[str, Any],
+    summary="Check one tracked item",
+    tags=["Items"],
+)
+async def check_item(item_id: str) -> Dict[str, Any]:
+    items = storage.load_items()
+    item = next((i for i in items if i.id == item_id), None)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    cfg = storage.load_config()
+    updated = await asyncio.to_thread(cli_main._check_one, item, cfg)
+    return {"status": "success", "item": _item_to_payload(updated)}
+
+
+@app.post(
+    "/monitor/check-all",
+    response_model=Dict[str, Any],
+    summary="Check all tracked items",
+    tags=["Monitoring"],
+)
+async def check_all_items() -> Dict[str, Any]:
+    cfg = storage.load_config()
+    items = storage.load_items()
+    updated_items = []
+    for item in items:
+        updated = await asyncio.to_thread(cli_main._check_one, item, cfg)
+        updated_items.append(_item_to_payload(updated))
+    return {"status": "success", "checked_count": len(updated_items), "items": updated_items}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
