@@ -11,7 +11,7 @@ Handles:
 import re
 import time
 from typing import Optional, List, Dict
-from browserless import fetch_page_browserless_sync as _fetch_page
+from browserless import fetch_page_browserless_sync as _fetch_page_browserless_sync
 from bs4 import BeautifulSoup
 
 
@@ -505,85 +505,10 @@ def _price_for_condition(soup: BeautifulSoup, condition: str) -> Optional[float]
 
 # ── Public scraping API ───────────────────────────────────────────────────────
 
-def _launch_browser(playwright):
-    return playwright.chromium.launch(
-        headless=True,
-        args=[
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-blink-features=AutomationControlled",
-            "--disable-infobars",
-        ],
-    )
-
-
-def _make_context(browser):
-    return browser.new_context(
-        user_agent=(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        ),
-        locale="en-US",
-        viewport={"width": 1920, "height": 1080},
-        extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
-    )
-
-
 def _fetch_page(url: str) -> tuple:
-    """Return (html_content, final_url) after Playwright renders the page."""
+    """Return (html_content, final_url) using Browserless.io if configured."""
     try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        raise ImportError(
-            "playwright is not installed.\n"
-            "Run:  pip install playwright  then  playwright install chromium"
-        )
-
-    browser = None
-    ctx = None
-    page = None
-    
-    try:
-        with sync_playwright() as p:
-            try:
-                browser = _launch_browser(p)
-                ctx     = _make_context(browser)
-                page    = ctx.new_page()
-
-                # Hide automation fingerprint
-                page.add_init_script(
-                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
-                )
-                # Block binary assets for speed
-                page.route(
-                    "**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2,ttf,eot,mp4,webm}",
-                    lambda route: route.abort(),
-                )
-
-                page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-                # Brief pause for price JS to settle
-                time.sleep(2)
-
-                html      = page.content()
-                final_url = page.url
-                return html, final_url
-            finally:
-                if page:
-                    try:
-                        page.close()
-                    except:
-                        pass
-                if ctx:
-                    try:
-                        ctx.close()
-                    except:
-                        pass
-                if browser:
-                    try:
-                        browser.close()
-                    except:
-                        pass
+        return _fetch_page_browserless_sync(url)
     except Exception as exc:
         raise ConnectionError(f"Could not load page: {exc}") from exc
 
