@@ -1,98 +1,65 @@
-# Amazon Price Tracker → API → RapidAPI
+# Open Data API
 
-A ready-to-deploy Amazon price tracker that works as a local CLI and a cloud API product.
+An open-source, multi-platform web data extraction API and CLI tool.
 
-This project is built to:
-- scrape Amazon product prices reliably,
-- expose those results via FastAPI,
-- use Browserless for cloud rendering,
-- and become a monetizable RapidAPI listing.
+Scrapes real-time data from Amazon, Google Search, Google Shopping, Google News, eBay, and any generic URL — all through a single FastAPI server or an interactive terminal interface.
 
-**Status:** ✅ CLI works locally | 🚀 API ready for deployment
+**Status:** ✅ CLI working | ✅ API working | ✅ 44/44 tests passing
 
 ---
 
-## 🎯 Product Overview
+## 🌐 What it does
 
-This is more than a scraper — it is a developer-friendly price tracking API.
-
-### What it does
-- Scrapes Amazon product pages for buy-box price, Prime price, list price, stock status, and discount data
-- Provides a lightweight price endpoint and a full product detail endpoint
-- Tracks items in local JSON storage for repeat monitoring
-- Supports condition-specific pricing (used/refurbished tiers)
-- Exposes item management and monitoring endpoints for API-driven workflows
-
-### Who it helps
-- resellers monitoring price movements
-- bargain hunters building custom alerts
-- competitors tracking pricing trends
-- developers building dashboards or price comparison tools
+| Platform | Data |
+|---|---|
+| **Amazon** | Price, Prime price, original price, discount %, stock, variants, condition tiers |
+| **Google Search** | Organic results, People Also Ask, related searches |
+| **Google Shopping** | Product cards, prices, stores, ratings, reviews |
+| **Google News** | Articles, sources, published times, thumbnails |
+| **eBay** | Title, price, condition, seller, shipping, stock, bid count |
+| **Generic Web** | Fully rendered HTML + optional plain-text for any URL |
 
 ---
 
 ## 🔧 How it works
 
-### Local mode
-- `main.py` runs an interactive CLI
-- lets users add and manage tracked Amazon products
-- uses local Playwright scraping when available
-- stores data in `./data/items.json`
+### Two modes
 
-### API mode
-- `api.py` exposes REST endpoints via FastAPI
-- `scraper.py` handles page parsing
-- `browserless.py` fetches rendered pages in the cloud
-- endpoints are ready for RapidAPI listing
+**CLI mode** (`main.py`) — interactive terminal tool. Select a platform, enter a query or URL, get formatted results. Includes full Amazon price tracking with persistent monitoring and alerts.
 
-### Deployment flow
+**API mode** (`api.py`) — FastAPI server. Self-hostable REST endpoints, browsable at `/docs`.
 
-```text
-RapidAPI user
-      ↓
-RapidAPI gateway
-      ↓
-Deployed Render/Railway service
-      ↓
-api.py → scraper.py → browserless.py
-      ↓
-Amazon product page
+### Two browser engines
+
+The engine is selected automatically based on your `.env`:
+
+```
+BROWSERLESS_API_KEY set?
+    YES → Browserless.io (no local Chromium needed)
+    NO  → Local Playwright (free, requires: playwright install chromium)
 ```
 
 ---
 
-## 🚀 Quick Start
-
-### 1) Run the CLI locally
+## ⚡ Quick Start
 
 ```bash
+# 1. Install dependencies
 pip install -r requirements.txt
+
+# 2. Set up browser engine (choose one)
+playwright install chromium          # Option A: local, free
+# OR: set BROWSERLESS_API_KEY in .env  # Option B: Browserless.io
+
+# 3a. Run the CLI
 python main.py
-```
 
-### 2) Run the API locally
-
-```bash
+# 3b. OR run the API
 python -m uvicorn api:app --reload --port 8000
+# Open: http://localhost:8000/docs
 ```
 
-Open the docs at:
-
-```text
-http://localhost:8000/docs
-```
-
-### 3) Test the endpoints
-
-```bash
-curl "http://localhost:8000/scrape/price?url=https://www.amazon.com/dp/B0DHJ896RY"
-
-curl "http://localhost:8000/scrape/full?url=https://www.amazon.com/dp/B0DHJ896RY"
-
-curl "http://localhost:8000/validate?url=https://www.amazon.com/dp/B0DHJ896RY"
-
-curl "http://localhost:8000/health"
-```
+See [QUICK_START.md](QUICK_START.md) for a full setup walkthrough and [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for hosting on Render, Railway, or Fly.io.
 
 ---
 
@@ -100,166 +67,151 @@ curl "http://localhost:8000/health"
 
 ```
 Price Tracker/
-├── main.py              # CLI entry point
-├── models.py            # Data structures
-├── scraper.py           # Amazon scraping logic
-├── storage.py           # JSON persistence
-├── notifier.py          # Alerts & notifications
 │
-├── api.py               # FastAPI server
-├── browserless.py       # Browserless integration
-├── requirements.txt     # Python dependencies
+├── engine.py               # Central fetch layer (Playwright ↔ Browserless)
+├── api.py                  # FastAPI server — all endpoints
+├── main.py                 # Interactive CLI
+├── storage.py              # JSON or SQLite persistence
+├── notifier.py             # Desktop alerts + console output
 │
-├── DEPLOYMENT_GUIDE.md  # RapidAPI deployment guide
-├── .env.example         # Environment template
-├── .gitignore           # Git ignore rules
+├── scrapers/               # One module per platform
+│   ├── amazon.py
+│   ├── google_search.py
+│   ├── google_shopping.py
+│   ├── google_news.py
+│   ├── ebay.py
+│   └── generic.py
 │
-└── data/
-    ├── config.json      # app settings
-    └── items.json       # tracked items
+├── models/                 # Domain-split data models
+│   ├── amazon.py
+│   ├── google.py
+│   └── ebay.py
+│
+├── tests/                  # pytest test suite (44 tests)
+│   ├── test_engine.py
+│   ├── test_amazon.py
+│   ├── test_google_search.py
+│   ├── test_ebay.py
+│   └── test_api.py
+│
+├── data/                   # Runtime storage (git-ignored)
+│   ├── config.json
+│   ├── items.json
+│   └── tracker.db          # (only if STORAGE_BACKEND=sqlite)
+│
+├── requirements.txt
+├── .env.example
+└── .gitignore
 ```
 
 ---
 
 ## 📋 API Endpoints
 
-### `GET /scrape/price`
-Fetch the current price and availability for a product.
+All endpoints return `{ "status": "ok", "data": {...}, "timestamp": "..." }`.
 
-- query: `url` (required)
-- query: `condition` (optional)
-- returns: price, original price, Prime price, stock, discount
-- use case: alerts, dashboards, price monitoring
+### Amazon
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/amazon/price?url=` | Price + stock (fast, ~10-15s) |
+| `GET` | `/amazon/product?url=` | Full details + variants (~20-30s) |
+| `POST` | `/amazon/items` | Add product to tracking list |
+| `GET` | `/amazon/items` | List all tracked products |
+| `POST` | `/amazon/items/{id}/check` | Refresh price for one item |
+| `POST` | `/amazon/monitor/check-all` | Refresh all tracked items |
 
-### `GET /scrape/full`
-Fetch detailed Amazon product metadata and variants.
+### Google
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/google/search?query=` | Web search (organic + PAA) |
+| `GET` | `/google/shopping?query=` | Product search + prices |
+| `GET` | `/google/news?query=` | News articles |
 
-- query: `url` (required)
-- returns: title, ASIN, pricing tiers, variants, stock data
-- use case: product research, catalogs, comparison tools
+### eBay
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/ebay/product?url=` | Listing details |
 
-### `GET /validate`
-Check whether a URL is a valid Amazon product link.
+### Web
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/web/fetch?url=` | Rendered HTML for any URL |
 
-- query: `url` (required)
-- returns: valid flag, normalized URL, ASIN
-- use case: request validation before scraping
-
-### `GET /health`
-Service health check.
-
-- returns: service status, version
-- use case: uptime monitoring
-
----
-
-## 🚀 Deploy to the Cloud
-
-### Recommended hosts
-- Render
-- Railway
-
-### Deploy steps
-1. Push the repo to GitHub
-2. Create a new web service on Render or Railway
-3. Use start command:
-   `uvicorn api:app --host 0.0.0.0 --port 8000`
-4. Add environment variables
-5. Deploy and copy your service URL
-
----
-
-## 💡 RapidAPI Integration
-
-This service is built to be published as a RapidAPI product:
-- point RapidAPI to your deployed backend URL
-- add the scraping endpoints
-- define pricing tiers
-- publish the listing
-
-Your backend handles scraping and Browserless calls; RapidAPI handles authentication, billing, and marketplace distribution.
+### System
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | Status + active engine |
+| `GET` | `/validate?url=` | Amazon URL validator |
+| `GET` | `/docs` | Swagger UI |
 
 ---
 
 ## 🛠️ Configuration
 
-Create a `.env` file from `.env.example`:
+Copy `.env.example` to `.env`:
 
 ```env
-BROWSERLESS_API_KEY=your_api_key_here
+# Leave blank for local Playwright, or set for Browserless.io
+BROWSERLESS_API_KEY=
+
+# Optional: self-hosted Browserless endpoint
+BROWSERLESS_URL=https://chrome.browserless.io
+
+# API port
 PORT=8000
+
+# Storage: "json" (default) or "sqlite" (enables price history)
+STORAGE_BACKEND=json
 ```
 
-Use Browserless when your cloud host cannot run local Chromium directly.
+---
+
+## 🗄️ Storage
+
+| Backend | Config | Features |
+|---|---|---|
+| JSON (default) | `STORAGE_BACKEND=json` | Zero config, human-readable files |
+| SQLite | `STORAGE_BACKEND=sqlite` | Price history tracking, concurrent-safe |
+
+SQLite adds a `price_history` table — every price check is appended as a row, enabling historical data queries.
 
 ---
 
-## ⚠️ Notes
-
-### Local vs Cloud
-
-| Mode | `main.py` | `api.py` |
-|------|-----------|----------|
-| Local | CLI + local scraping | not used |
-| Cloud | not used | API + Browserless |
-
-### Amazon scraping best practices
-- Keep request volume moderate
-- Add pauses between checks
-- Use Browserless to avoid browser binary issues
-- Respect Amazon’s terms of service
-
----
-
-## 🧪 Testing
-
-### Local
+## 🧪 Tests
 
 ```bash
-python -m uvicorn api:app --reload --port 8000
+python -m pytest tests/ -v
 ```
 
-### RapidAPI
-
-- Open your app in RapidAPI dashboard
-- Use the built-in endpoint tester
-- Confirm the backend URL is live
+44 tests covering engine routing, Amazon parsing, Google Search parsing, eBay parsing, and all API endpoints. All tests run with mocked HTML — no live network calls required.
 
 ---
 
-## 🐛 Troubleshooting
+## 🚀 Deployment
 
-### `Connection refused`
-Make sure API is running and reachable.
+Works on any host that supports Python. Free tiers available on:
+- [Render](https://render.com) — add `playwright install chromium` as a build command
+- [Railway](https://railway.app)
+- [Fly.io](https://fly.io)
 
-### `Module not found: scraper`
-Run from the repo root:
-
-```bash
-cd "c:\Users\fulto\Downloads\Some Projects\Price Tracker"
-python -m uvicorn api:app --reload
-```
-
-### Playwright / Chromium issues
-Use `BROWSERLESS_API_KEY` with Browserless.io instead of local browser execution.
+See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for step-by-step instructions.
 
 ---
 
-## 📌 Next Steps
+## 🤝 Contributing
 
-1. Run the CLI locally
-2. Run the API locally and verify `/docs`
-3. Deploy to Render/Railway
-4. Connect the deployed URL to RapidAPI
-5. Publish and monitor usage
+Adding a new scraper is straightforward:
+
+1. Create `scrapers/yourplatform.py` — import `engine`, parse with BeautifulSoup, return a dict
+2. Create `models/yourplatform.py` — dataclass or Pydantic model for the result
+3. Add a router in `api.py` under a new prefix (e.g. `/yourplatform/...`)
+4. Add a flow function in `main.py` for CLI access
+5. Write tests in `tests/test_yourplatform.py`
 
 ---
 
-## 📞 Resources
+## ⚠️ Usage Notes
 
-- [Deployment Guide](DEPLOYMENT_GUIDE.md)
-- [FastAPI docs](https://fastapi.tiangolo.com/)
-- [RapidAPI docs](https://rapidapi.com/documentation)
-- [Browserless docs](https://www.browserless.io/docs)
-
-**Built for developers who want a real API product, not just a script.**
+- **Rate limiting:** Add pauses between requests. Amazon and Google will throttle or CAPTCHA-block aggressive scrapers.
+- **Bot detection:** Use Browserless or a proxy service if you hit CAPTCHA walls.
+- **Terms of service:** Use responsibly and respect each platform's ToS.

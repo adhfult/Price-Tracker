@@ -18,9 +18,9 @@ from typing import Optional, List, Tuple
 import schedule
 from colorama import Fore, Style, init as _init
 
-from models import TrackedItem, AlertCriteria, AlertType
+from models.amazon import TrackedItem, AlertCriteria, AlertType
 import storage
-import scraper
+import scrapers.amazon as scraper
 import notifier
 
 _init(autoreset=True)
@@ -609,16 +609,181 @@ def settings_menu(cfg: dict) -> dict:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  Entry point
+#  Non-Amazon platform flows
 # ══════════════════════════════════════════════════════════════════════════════
 
-def main():
-    _hr("Amazon Price Tracker")
+def _google_search_flow():
+    """Interactive Google Search loop."""
+    import scrapers.google_search as gs
+    while True:
+        _hr("Google Search")
+        query = _ask("Search query (or blank to go back)").strip()
+        if not query:
+            return
+        print(f"\n{Fore.CYAN}Searching...{Style.RESET_ALL}")
+        sys.stdout.flush()
+        try:
+            result = gs.search(query)
+        except Exception as exc:
+            notifier.error(str(exc))
+            continue
 
-    cfg = storage.load_config()
-    if not cfg.get("currency") or not cfg.get("location"):
-        cfg = _setup_wizard()
+        organic = result["organic_results"]
+        if not organic:
+            notifier.warn("No results found.")
+            continue
 
+        _hr(f"Results for: {query}")
+        for r in organic:
+            print(f"  {Fore.YELLOW}{r['position']}.{Style.RESET_ALL} {r['title']}")
+            print(f"     {Fore.CYAN}{r['url']}{Style.RESET_ALL}")
+            if r.get("snippet"):
+                print(f"     {r['snippet'][:120]}")
+            print()
+
+        if result["people_also_ask"]:
+            print(f"  {Fore.GREEN}People Also Ask:{Style.RESET_ALL}")
+            for q in result["people_also_ask"][:4]:
+                print(f"    • {q}")
+            print()
+
+        input("  Press Enter to search again...")
+
+
+def _google_shopping_flow():
+    """Interactive Google Shopping loop."""
+    import scrapers.google_shopping as gsh
+    while True:
+        _hr("Google Shopping")
+        query = _ask("Product query (or blank to go back)").strip()
+        if not query:
+            return
+        country = _ask("Country code", default="us").lower()
+        print(f"\n{Fore.CYAN}Searching...{Style.RESET_ALL}")
+        sys.stdout.flush()
+        try:
+            result = gsh.shopping_search(query, country=country)
+        except Exception as exc:
+            notifier.error(str(exc))
+            continue
+
+        items = result["results"]
+        if not items:
+            notifier.warn("No products found.")
+            continue
+
+        _hr(f"Shopping: {query}")
+        for r in items:
+            price_str = f"${r['price']:.2f}" if r["price"] else "N/A"
+            rating_str = f"  ★ {r['rating']:.1f}" if r.get("rating") else ""
+            print(f"  {Fore.YELLOW}{r['position']}.{Style.RESET_ALL} {r['title']}")
+            print(f"     {Fore.GREEN}{price_str}{Style.RESET_ALL}  from {r['store']}{rating_str}")
+            if r.get("product_url"):
+                print(f"     {Fore.CYAN}{r['product_url'][:80]}{Style.RESET_ALL}")
+            print()
+
+        input("  Press Enter to search again...")
+
+
+def _google_news_flow():
+    """Interactive Google News loop."""
+    import scrapers.google_news as gn
+    while True:
+        _hr("Google News")
+        query = _ask("News query (or blank to go back)").strip()
+        if not query:
+            return
+        print(f"\n{Fore.CYAN}Searching...{Style.RESET_ALL}")
+        sys.stdout.flush()
+        try:
+            result = gn.news_search(query)
+        except Exception as exc:
+            notifier.error(str(exc))
+            continue
+
+        articles = result["articles"]
+        if not articles:
+            notifier.warn("No articles found.")
+            continue
+
+        _hr(f"News: {query}")
+        for a in articles:
+            pub = f"  {Fore.YELLOW}{a['published']}{Style.RESET_ALL}" if a.get("published") else ""
+            print(f"  {Fore.YELLOW}{a['position']}.{Style.RESET_ALL} {a['title']}{pub}")
+            print(f"     {Fore.CYAN}{a['source']}{Style.RESET_ALL}")
+            if a.get("url"):
+                print(f"     {a['url'][:80]}")
+            print()
+
+        input("  Press Enter to search again...")
+
+
+def _ebay_flow():
+    """Interactive eBay listing lookup loop."""
+    import scrapers.ebay as eb
+    while True:
+        _hr("eBay Product Lookup")
+        url = _ask("eBay listing URL (or blank to go back)").strip()
+        if not url:
+            return
+        print(f"\n{Fore.CYAN}Fetching listing...{Style.RESET_ALL}")
+        sys.stdout.flush()
+        try:
+            listing = eb.get_listing(url)
+        except Exception as exc:
+            notifier.error(str(exc))
+            continue
+
+        _hr("eBay Listing")
+        print(f"  {Fore.YELLOW}{listing['title']}{Style.RESET_ALL}")
+        price_str = f"${listing['price']:.2f}" if listing["price"] else "N/A"
+        print(f"  Price     : {Fore.GREEN}{price_str}{Style.RESET_ALL}")
+        print(f"  Condition : {listing['condition']}")
+        print(f"  Seller    : {listing['seller']}", end="")
+        if listing.get("seller_feedback"):
+            print(f"  ({listing['seller_feedback']}% positive)", end="")
+        print()
+        print(f"  Shipping  : {listing['shipping']}")
+        stock_tag = f"{Fore.GREEN}In Stock" if listing["in_stock"] else f"{Fore.RED}Out of Stock"
+        print(f"  Stock     : {stock_tag}{Style.RESET_ALL}")
+        if listing.get("bids") is not None:
+            print(f"  Bids      : {listing['bids']}")
+        print(f"  URL       : {listing['url'][:72]}")
+
+        input("\n  Press Enter to look up another...")
+
+
+def _generic_web_flow():
+    """Interactive generic web fetch loop."""
+    import scrapers.generic as gw
+    while True:
+        _hr("Generic Web Fetch")
+        url = _ask("URL to fetch (or blank to go back)").strip()
+        if not url:
+            return
+        include_text = _ask("Include plain-text extraction? (y/n)", default="n").lower() == "y"
+        print(f"\n{Fore.CYAN}Fetching...{Style.RESET_ALL}")
+        sys.stdout.flush()
+        try:
+            result = gw.fetch_html(url, include_text=include_text)
+        except Exception as exc:
+            notifier.error(str(exc))
+            continue
+
+        _hr("Fetch Result")
+        status_color = Fore.GREEN if result["status"] == "ok" else Fore.RED
+        print(f"  Status    : {status_color}{result['status'].upper()}{Style.RESET_ALL}")
+        print(f"  Final URL : {result['url']}")
+        print(f"  HTML size : {len(result['html']):,} bytes")
+        if result.get("text"):
+            preview = result["text"][:400].replace("\n", " ")
+            print(f"\n  Text preview:\n  {preview}...")
+
+        input("\n  Press Enter to fetch another...")
+
+
+def _amazon_main(cfg: dict):
+    """Full Amazon price tracker main loop."""
     while True:
         items    = storage.load_items()
         n_items  = len(items)
@@ -628,7 +793,7 @@ def main():
         if n_alerts:
             status += f"   {Fore.GREEN}|  {n_alerts} alert(s) triggered!{Style.RESET_ALL}"
 
-        _hr(f"Main Menu  ·  {cfg['currency']}  ·  {cfg['location']}")
+        _hr(f"Amazon Tracker  ·  {cfg['currency']}  ·  {cfg['location']}")
         print(status + "\n")
 
         idx = _menu([
@@ -637,7 +802,7 @@ def main():
             "Check all prices now",
             "Start auto-monitoring",
             "Settings",
-            "Exit",
+            "Back to platform menu",
         ], "Choose")
 
         if   idx == 0:  add_item_flow(cfg)
@@ -645,7 +810,43 @@ def main():
         elif idx == 2:  check_all(cfg)
         elif idx == 3:  run_monitor(cfg)
         elif idx == 4:  cfg = settings_menu(cfg)
-        elif idx == 5:
+        elif idx == 5:  return cfg
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Entry point
+# ══════════════════════════════════════════════════════════════════════════════
+
+def main():
+    _hr("Open Data API  —  CLI")
+    print(f"  {Fore.CYAN}Multi-platform data extraction tool{Style.RESET_ALL}\n")
+
+    cfg = storage.load_config()
+
+    while True:
+        _hr("Platform Select")
+        idx = _menu([
+            f"{Fore.YELLOW}Amazon{Style.RESET_ALL}         — Price tracking, alerts, monitoring",
+            f"{Fore.CYAN}Google Search{Style.RESET_ALL}   — Web search results (SERP)",
+            f"{Fore.CYAN}Google Shopping{Style.RESET_ALL} — Product search & price comparison",
+            f"{Fore.CYAN}Google News{Style.RESET_ALL}     — Real-time news articles",
+            f"{Fore.GREEN}eBay{Style.RESET_ALL}            — Product listing lookup",
+            f"{Fore.GREEN}Generic Web{Style.RESET_ALL}     — Fetch rendered HTML for any URL",
+            "Exit",
+        ], "Select platform")
+
+        if idx == 0:
+            # Amazon needs currency/location config
+            if not cfg.get("currency") or not cfg.get("location"):
+                cfg = _setup_wizard()
+            cfg = _amazon_main(cfg)
+
+        elif idx == 1:  _google_search_flow()
+        elif idx == 2:  _google_shopping_flow()
+        elif idx == 3:  _google_news_flow()
+        elif idx == 4:  _ebay_flow()
+        elif idx == 5:  _generic_web_flow()
+        elif idx == 6:
             print(f"\n{Fore.CYAN}Goodbye!{Style.RESET_ALL}\n")
             sys.exit(0)
 

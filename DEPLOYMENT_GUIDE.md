@@ -1,328 +1,300 @@
-# 🚀 Complete Implementation Plan: Price Tracker → RapidAPI
+# Deployment Guide
 
-## Current Architecture (Local CLI)
-```
-main.py (CLI Menu)
-├── scraper.py (Playwright)
-├── models.py (Data structures)
-├── storage.py (JSON files)
-└── notifier.py (Alerts)
-```
-
-## New Architecture (API + Marketplace)
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    RapidAPI Marketplace                          │
-│  (User pays → RapidAPI gateway → Routes requests → Collects fees)│
-└───────────────────────┬─────────────────────────────────────────┘
-                        │ HTTP GET /scrape/price?url=...&key=...
-                        ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Render / Railway                             │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ api.py (FastAPI)                                          │  │
-│  │ - /scrape/price       (lightweight, ~15s)               │  │
-│  │ - /scrape/full        (comprehensive, ~25s)             │  │
-│  │ - /validate           (quick URL check, <100ms)         │  │
-│  │ - /health             (uptime monitoring)                │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└───────────────────────┬─────────────────────────────────────────┘
-                        │
-        ┌───────────────┴───────────────┐
-        ▼                               ▼
-   ┌─────────────┐            ┌──────────────────┐
-   │ scraper.py  │            │ browserless.py   │
-   │(Local or    │◄──────────►│(Cloud-based      │
-   │Browserless) │            │ Playwright)      │
-   └─────────────┘            └──────────────────┘
-```
+This guide covers deploying the Open Data API to three free cloud platforms: **Render**, **Railway**, and **Fly.io**. No Docker, no credit card required.
 
 ---
 
-## 📋 Implementation Checklist
+## Before you deploy
 
-### Phase 1: Local Development & Testing
+### Choose your browser engine
 
-#### ✅ Step 1: Install FastAPI Dependencies
-```bash
-pip install fastapi uvicorn pydantic
-# Or: pip install -r requirements.txt
-```
+When deployed to the cloud, you need to render JavaScript-heavy pages. You have two options:
 
-#### ✅ Step 2: Test API Locally
-```bash
-cd "c:\Users\fulto\Downloads\Some Projects\Price Tracker"
-python -m uvicorn api:app --reload --port 8000
-```
+**Option A — Local Playwright (install Chromium on the host)**
 
-Navigate to: `http://localhost:8000/docs`
+Most hosts support this via a build command. This is completely free.
 
-You'll see interactive Swagger UI where you can test all endpoints!
+**Option B — Browserless.io**
 
-**Test the endpoints:**
-- GET `/scrape/price?url=https://www.amazon.com/dp/B0DHJ896RY`
-- GET `/scrape/full?url=https://www.amazon.com/dp/B0DHJ896RY`
-- GET `/validate?url=https://www.amazon.com/dp/B0DHJ896RY`
-- GET `/health`
+If your host can't install Chromium or you want a managed solution, use Browserless.io. The free tier provides 100 pages/month.
 
-#### ✅ Step 3: Verify Existing Code Still Works
-```bash
-python main.py  # CLI should work unchanged
-```
-
-Both CLI (main.py) and API (api.py) coexist!
+Sign up at [browserless.io](https://www.browserless.io/) and copy your API key.
 
 ---
 
-### Phase 2: Cloud-Based Playwright (Browserless.io)
+## Render
 
-> **Why?** Some cloud platforms do not support installing Chromium system binaries. Solution: Use Browserless.io API instead.
+Render's free tier supports web services with persistent deploys.
 
-#### ✅ Step 1: Sign Up for Browserless.io
-1. Go to https://www.browserless.io/
-2. Sign up (free tier: 100 pages/month)
-3. Copy your API key from dashboard
+### Steps
 
-#### ✅ Step 2: Configure Browserless
-```bash
-# Set environment variable:
-$env:BROWSERLESS_API_KEY = "your_api_key_here"
+**1. Push your repo to GitHub**
 
-# Or run interactive setup:
-python -c "from browserless import setup_browserless; setup_browserless()"
-```
-
-#### ✅ Step 3: (Optional) Enable in scraper.py
-If deploying to a cloud host that does not support local browser binaries, uncomment this in scraper.py:
-```python
-# from browserless import fetch_page_browserless_sync as _fetch_page
-```
-
-And comment out the local Playwright version:
-```python
-# with sync_playwright() as p: ...
-```
-
-> **Cost:** ~$0.02-0.05 per 1000 pages (includes free tier)
-
----
-
-### Phase 3: Deploy to Render or Railway
-
-#### ✅ Step 1: Prepare GitHub Repository
 ```bash
 git init
 git add .
-git commit -m "Add FastAPI backend for RapidAPI"
-git remote add origin https://github.com/yourusername/price-tracker.git
+git commit -m "initial commit"
+git remote add origin https://github.com/your-username/your-repo.git
 git push -u origin main
 ```
 
-> Need GitHub? Free account at https://github.com
+**2. Create a new Web Service on Render**
 
-#### ✅ Step 2: Deploy to Render or Railway
-1. Go to https://render.com/ or https://railway.app/
-2. Create a new web service and connect your GitHub repo
-3. Set the start command to:
-   `uvicorn api:app --host 0.0.0.0 --port 8000`
-4. Set any required environment variables
-5. Deploy the service
+- Go to [render.com](https://render.com) → New → Web Service
+- Connect your GitHub repo
 
-#### ✅ Step 3: Install Dependencies
-Your service will install dependencies from `requirements.txt` automatically during deploy.
+**3. Configure the service**
 
-#### ✅ Step 4: Get Your Live URL
-Your API is now live at the URL provided by the platform.
+| Setting | Value |
+|---|---|
+| Runtime | Python 3 |
+| Build Command | `pip install -r requirements.txt && playwright install chromium` |
+| Start Command | `uvicorn api:app --host 0.0.0.0 --port $PORT` |
 
-Test it:
-```bash
-curl https://your-app-url.onrender.com/health
+> If using Browserless instead of local Playwright, remove `playwright install chromium` from the build command.
+
+**4. Add environment variables**
+
+In the Render dashboard → Environment:
+
+```
+PORT=10000
+STORAGE_BACKEND=json
 ```
 
-Should return:
+If using Browserless:
+```
+BROWSERLESS_API_KEY=your_key_here
+```
+
+**5. Deploy**
+
+Click **Deploy**. After a few minutes your service will be live at:
+```
+https://your-service-name.onrender.com
+```
+
+**6. Verify**
+
+```bash
+curl https://your-service-name.onrender.com/health
+```
+
+Expected response:
 ```json
-{
-  "status": "online",
-  "version": "1.0.0",
-  "service": "Amazon Price Scraper API"
-}
+{ "status": "ok", "engine": "playwright", "version": "2.0.0" }
 ```
 
 ---
 
-### Phase 4: Connect to RapidAPI
+## Railway
 
-#### ✅ Step 1: Go to Your RapidAPI Dashboard
-You already have an "Amazon-Price-Scraper" app set up (from your screenshot).
+Railway provides a generous free tier with easy GitHub integration.
 
-#### ✅ Step 2: Set Base URL
-1. Click your app → **Settings** tab
-2. Find **Base URL** field
-3. Enter your deployed service URL (e.g. `https://your-app-url.onrender.com`)
-4. **Save**
+### Steps
 
-#### ✅ Step 3: Define Endpoints
-Click **Endpoints** → **Create Endpoint** (repeat for each):
+**1. Push your repo to GitHub** (same as Render step 1 above)
 
-**Endpoint 1: Get Price**
-- **Name:** `Get Current Price`
-- **Method:** `GET`
-- **Path:** `/scrape/price`
-- **Required Parameters:**
-  - `url` (query string, string)
-- **Optional Parameters:**
-  - `condition` (query string, string)
+**2. Create a new project on Railway**
 
-**Endpoint 2: Get Full Details**
-- **Name:** `Get Full Product Details`
-- **Method:** `GET`
-- **Path:** `/scrape/full`
-- **Required Parameters:**
-  - `url` (query string, string)
+- Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo
+- Select your repo
 
-**Endpoint 3: Validate URL**
-- **Name:** `Validate Amazon URL`
-- **Method:** `GET`
-- **Path:** `/validate`
-- **Required Parameters:**
-  - `url` (query string, string)
+**3. Add a Nixpacks build configuration**
 
-**Endpoint 4: Health Check**
-- **Name:** `Health Check`
-- **Method:** `GET`
-- **Path:** `/health`
+Create a file `nixpacks.toml` in your project root:
 
-#### ✅ Step 4: Configure Rate Limits
-In RapidAPI Studio:
-1. **Hub Listing** → **Pricing**
-2. Set your pricing tiers:
-   - **Free:** 100 calls/month
-   - **Basic:** $9.99/month → 1000 calls/month
-   - **Pro:** $49.99/month → 10,000 calls/month
+```toml
+[phases.setup]
+nixPkgs = ["chromium", "nss", "at-spi2-atk", "cups", "libxcomposite"]
 
-#### ✅ Step 5: Publish to Marketplace
-1. Click **Publish**
-2. Fill out listing details
-3. Submit for review (~24-48 hours)
+[phases.install]
+cmds = ["pip install -r requirements.txt && playwright install chromium"]
 
-Once approved, your API is live on RapidAPI marketplace!
-
----
-
-### Phase 5: Monitoring & Maintenance
-
-#### ✅ Set Up Uptime Monitoring
-Use **UptimeRobot.com** (free):
-1. Go to https://uptimerobot.com/
-2. Add new monitor for your deployed health endpoint
-3. Get alerted if your API goes down
-
-#### ✅ Monitor Usage on RapidAPI
-- **Analytics** tab shows calls/month
-- **Revenue** tab shows earnings
-- **Requests** tab shows errors/logs
-
-#### ✅ Handle Rate Limiting
-Add to api.py if needed:
-```python
-from fastapi_limiter import FastAPILimiter
-from fastapi_limiter.util import get_redis
-
-# Limit to 100 requests per minute
-@limiter.limit("100/minute")
-@app.get("/scrape/price")
-async def get_price(...):
-    ...
+[start]
+cmd = "uvicorn api:app --host 0.0.0.0 --port $PORT"
 ```
 
+> If using Browserless, skip the nixpacks.toml and just set the env var.
+
+**4. Set environment variables**
+
+In Railway → Settings → Variables:
+
+```
+STORAGE_BACKEND=json
+BROWSERLESS_API_KEY=your_key_here   # only if using Browserless
+```
+
+**5. Deploy**
+
+Railway auto-deploys on every `git push`. Your service URL is shown in the Railway dashboard.
+
 ---
 
-## 📊 Pricing & Revenue Model
+## Fly.io
 
-| Tier | Price | Calls/Month | My Revenue (70%) |
-|------|-------|-------------|-----------------|
-| **Free** | $0 | 100 | $0 |
-| **Basic** | $9.99 | 1000 | ~$7 |
-| **Pro** | $49.99 | 10,000 | ~$35 |
-| **Ultra** | $99.99 | 50,000 | ~$70 |
+Fly.io is a great option for persistent workloads. The free tier includes 3 shared-CPU VMs.
 
-> RapidAPI takes 30%, you keep 70% (standard commission).
-> 
-> At 100 developers using Pro tier = **$3,500/month revenue**
+### Steps
 
----
+**1. Install the Fly CLI**
 
-## 🔧 Troubleshooting
-
-### "Module not found" error on deployment host
 ```bash
-pip install -r requirements.txt --force-reinstall
+# Windows (PowerShell)
+iwr https://fly.io/install.ps1 -useb | iex
+
+# macOS/Linux
+curl -L https://fly.io/install.sh | sh
 ```
 
-### Playwright fails on deployment host
-**Solution:** Use Browserless.io instead (already configured in this guide).
+**2. Login**
 
-### API returns 429 (Amazon rate limiting)
-**Solution:** 
-- Add delay between requests: `time.sleep(3)`
-- Use rotating proxies (Bright Data, Oxylabs)
-- Respect robots.txt
-
-### RapidAPI shows "Endpoint unreachable"
-**Debugging:**
 ```bash
-# Test from deployment host:
-curl https://your-app-url.onrender.com/health
+fly auth login
+```
 
-# Check logs:
-# Render or Railway console logs
+**3. Create a `fly.toml` in your project root**
+
+```toml
+app = "your-app-name"
+primary_region = "iad"
+
+[build]
+  builder = "paketobuildpacks/builder:base"
+
+[env]
+  PORT = "8080"
+  STORAGE_BACKEND = "json"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+```
+
+**4. Add a `Procfile`**
+
+```
+web: playwright install chromium && uvicorn api:app --host 0.0.0.0 --port $PORT
+```
+
+> Replace the Playwright install with just `uvicorn api:app ...` if using Browserless.
+
+**5. Set secrets (env vars)**
+
+```bash
+fly secrets set BROWSERLESS_API_KEY=your_key_here   # only if using Browserless
+```
+
+**6. Deploy**
+
+```bash
+fly launch
+fly deploy
+```
+
+**7. Verify**
+
+```bash
+curl https://your-app-name.fly.dev/health
 ```
 
 ---
 
-## 📚 Files Created/Modified
+## Post-deployment: testing your endpoints
 
-| File | Purpose |
-|------|---------|
-| `api.py` | **NEW** - FastAPI server with endpoints |
-| `browserless.py` | **NEW** - Cloud Playwright integration |
-| `requirements.txt` | **UPDATED** - Added FastAPI + uvicorn |
-| `main.py` | Unchanged - CLI still works |
-| `scraper.py` | Unchanged - API reuses it |
+Once live, test any endpoint by replacing `localhost:8000` with your deployed URL:
 
----
+```bash
+BASE=https://your-service-url.onrender.com
 
-## 🎯 Next Steps
+# Health check
+curl $BASE/health
 
-1. **Test locally** → `python -m uvicorn api:app --reload --port 8000`
-2. **Push to GitHub** → Create repo + push code
-3. **Deploy to Render or Railway** → Connect GitHub + deploy
-4. **Configure RapidAPI** → Set base URL + endpoints
-5. **Test endpoints** → Use RapidAPI's "Test Endpoint" feature
-6. **Publish** → Submit to marketplace
-7. **Monitor** → Track usage + revenue
+# Amazon price
+curl "$BASE/amazon/price?url=https://www.amazon.com/dp/B0DHJ896RY"
 
----
+# Google Search
+curl "$BASE/google/search?query=python+web+scraping"
 
-## 💡 Additional Features (Future)
+# Google Shopping
+curl "$BASE/google/shopping?query=mechanical+keyboard"
 
-- **Caching:** Cache results for 1 hour to reduce API calls
-- **Webhooks:** Notify customers when price drops
-- **Batch API:** Accept multiple URLs in one request
-- **CSV Export:** Return results as CSV
-- **Scheduled Monitoring:** Integration with automation platforms
+# Google News
+curl "$BASE/google/news?query=open+source+tools"
 
----
+# eBay listing
+curl "$BASE/ebay/product?url=https://www.ebay.com/itm/YOUR_ITEM_ID"
 
-## 📞 Support Resources
+# Generic web fetch
+curl "$BASE/web/fetch?url=https://example.com"
+```
 
-- **FastAPI Docs:** https://fastapi.tiangolo.com/
-- **RapidAPI Hub:** https://rapidapi.com/documentation
-- **Render docs:** https://render.com/docs
-- **Railway docs:** https://docs.railway.app/
-- **Browserless.io:** https://www.browserless.io/docs
-- **Browserless.io:** https://www.browserless.io/docs
+Browse the full interactive docs at:
+```
+https://your-service-url/docs
+```
 
 ---
 
-**Built with ❤️ for developers who want to monetize their tools.**
+## Switching to SQLite on a cloud host
+
+If your host supports a persistent disk volume, switch to SQLite to get price history:
+
+Set the environment variable:
+```
+STORAGE_BACKEND=sqlite
+```
+
+SQLite stores everything in `data/tracker.db`. Make sure your host mounts a persistent disk at the `data/` path — otherwise the database will be wiped on each redeploy.
+
+- **Render:** Add a Disk in the Render dashboard, mount path `/app/data`
+- **Railway:** Use Railway's Volume feature, mount at `/app/data`
+- **Fly.io:** Add a volume in `fly.toml`:
+
+```toml
+[mounts]
+  source = "data_volume"
+  destination = "/app/data"
+```
+
+---
+
+## Uptime monitoring (optional)
+
+To keep your free-tier service from spinning down due to inactivity, set up a free uptime monitor:
+
+- [UptimeRobot](https://uptimerobot.com) — free, monitors every 5 minutes
+- [Freshping](https://www.freshworks.com/website-monitoring/) — free tier available
+
+Point it at your `/health` endpoint.
+
+---
+
+## Troubleshooting
+
+### `playwright._impl._errors.Error: Executable doesn't exist`
+Chromium wasn't installed. Make sure `playwright install chromium` is in your build command.
+
+### `BROWSERLESS_API_KEY not set`
+You removed the Playwright install step but forgot to set the env var. Either reinstall Playwright or set the key.
+
+### `Module not found: scrapers`
+Make sure you're running from the project root. The start command should be:
+```
+uvicorn api:app --host 0.0.0.0 --port $PORT
+```
+Not from a subdirectory.
+
+### Amazon/Google returning CAPTCHA errors
+- Reduce request frequency
+- Switch to Browserless if using local Playwright
+- Add residential proxy support to `engine.py`
